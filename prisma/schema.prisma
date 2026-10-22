@@ -1,0 +1,136 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  PATIENT
+  DOCTOR
+  RESPONDER
+  ADMIN
+}
+
+enum AlertStatus {
+  TRIGGERED
+  DISPATCHED
+  RESOLVED
+  CANCELLED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  passwordHash   String
+  role           Role            @default(PATIENT)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  patientProfile PatientProfile?
+  doctorProfile  DoctorProfile?
+}
+
+model PatientProfile {
+  id                String             @id @default(uuid())
+  userId            String             @unique
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName         String
+  lastName          String
+  dateOfBirth       DateTime
+  bloodGroup        String
+  allergies         String[]
+  chronicConditions String[]
+  emergencyPin      String?
+  qrAccessCode      String             @unique @default(uuid())
+  qrTokenVersion    Int                @default(0)
+  emergencyContacts EmergencyContact[]
+  medicalRecords    MedicalRecord[]
+  appointments      Appointment[]
+  emergencyAlerts   EmergencyAlert[]
+}
+
+model EmergencyContact {
+  id           String         @id @default(uuid())
+  patientId    String
+  patient      PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  name         String
+  relationship String
+  phoneNumber  String
+  isPrimary    Boolean        @default(false)
+}
+
+model MedicalRecord {
+  id                String         @id @default(uuid())
+  patientId         String
+  patient           PatientProfile @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  title             String
+  description       String
+  fileUrl           String // S3 object key
+  fileEncryptionKey String?
+  uploadedBy        String
+  createdAt         DateTime       @default(now())
+}
+
+model EmergencyAlert {
+  id          String         @id @default(uuid())
+  patientId   String
+  patient     PatientProfile @relation(fields: [patientId], references: [id])
+  status      AlertStatus    @default(TRIGGERED)
+  latitude    Float
+  longitude   Float
+  responderId String? // User.id of responder
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([status])
+}
+
+model Hospital {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  phone     String
+  latitude  Float
+  longitude Float
+  createdAt DateTime @default(now())
+}
+
+model DoctorProfile {
+  id              String        @id @default(uuid())
+  userId          String        @unique
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName        String
+  specialty       String
+  licenseNumber   String        @unique
+  consultationFee Float         @default(500)
+  appointments    Appointment[]
+}
+
+model Appointment {
+  id              String            @id @default(uuid())
+  patientId       String
+  patient         PatientProfile    @relation(fields: [patientId], references: [id])
+  doctorId        String
+  doctor          DoctorProfile     @relation(fields: [doctorId], references: [id])
+  scheduledAt     DateTime
+  status          AppointmentStatus @default(SCHEDULED)
+  paymentStatus   PaymentStatus     @default(PENDING)
+  amount          Float
+  stripeSessionId String?
+
+  @@index([doctorId, scheduledAt])
+}
