@@ -40,48 +40,58 @@ export const initSocket = (server: HttpServer) => {
     if (user.role === "RESPONDER" || user.role === "ADMIN") socket.join("responders");
 
     // alert room-e join (live location dekhar jonno)
-    socket.on("alert:join", async (alertId: string, ack?: (r: { ok: boolean }) => void) => {
-      let ok = false;
-      if (typeof alertId === "string") {
-        if (user.role === "RESPONDER" || user.role === "ADMIN") {
-          ok = true;
-        } else if (user.role === "PATIENT") {
-          const a = await prisma.emergencyAlert.findFirst({
-            where: { id: alertId, patient: { userId: user.id } },
-          });
-          ok = !!a;
+        socket.on("alert:join", async (alertId: string, ack?: (r: { ok: boolean }) => void) => {
+      try {
+        let ok = false;
+        if (typeof alertId === "string") {
+          if (user.role === "RESPONDER" || user.role === "ADMIN") {
+            ok = true;
+          } else if (user.role === "PATIENT") {
+            const a = await prisma.emergencyAlert.findFirst({
+              where: { id: alertId, patient: { userId: user.id } },
+            });
+            ok = !!a;
+          }
         }
+        if (ok) await socket.join(`alert:${alertId}`);
+        ack?.({ ok });
+      } catch (e) {
+        console.error("alert:join failed", e);
+        ack?.({ ok: false });
       }
-      if (ok) await socket.join(`alert:${alertId}`);
-      ack?.({ ok });
     });
 
     // patient ba assigned responder-er live GPS
+        // patient ba assigned responder-er live GPS
     socket.on("location:update", async (raw: unknown) => {
-      const parsed = locationSchema.safeParse(raw);
-      if (!parsed.success) return;
-      const { alertId, latitude, longitude } = parsed.data;
+      try {
+        const parsed = locationSchema.safeParse(raw);
+        if (!parsed.success) return;
+        const { alertId, latitude, longitude } = parsed.data;
 
-      const alert = await prisma.emergencyAlert.findUnique({
-        where: { id: alertId },
-        include: { patient: { select: { userId: true } } },
-      });
-      if (!alert || !["TRIGGERED", "DISPATCHED"].includes(alert.status)) return;
+        const alert = await prisma.emergencyAlert.findUnique({
+          where: { id: alertId },
+          include: { patient: { select: { userId: true } } },
+        });
+        if (!alert || !["TRIGGERED", "DISPATCHED"].includes(alert.status)) return;
 
-      const isPatient = user.role === "PATIENT" && alert.patient.userId === user.id;
-      const isResponder = user.role === "RESPONDER" && alert.responderId === user.id;
-      if (!isPatient && !isResponder) return;
+        const isPatient = user.role === "PATIENT" && alert.patient.userId === user.id;
+        const isResponder = user.role === "RESPONDER" && alert.responderId === user.id;
+        if (!isPatient && !isResponder) return;
 
-      if (isPatient) {
-        await prisma.emergencyAlert.update({ where: { id: alertId }, data: { latitude, longitude } });
+        if (isPatient) {
+          await prisma.emergencyAlert.update({ where: { id: alertId }, data: { latitude, longitude } });
+        }
+        socket.to(`alert:${alertId}`).emit("location:update", {
+          alertId,
+          from: user.role,
+          latitude,
+          longitude,
+          at: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error("location:update failed", e);
       }
-      socket.to(`alert:${alertId}`).emit("location:update", {
-        alertId,
-        from: user.role,
-        latitude,
-        longitude,
-        at: new Date().toISOString(),
-      });
     });
   });
 

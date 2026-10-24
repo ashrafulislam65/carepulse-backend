@@ -4,6 +4,8 @@ import { env } from "./config/env";
 import { prisma } from "./lib/prisma";
 import { initSocket } from "./lib/socket";
 
+process.on("unhandledRejection", (e) => console.error("unhandledRejection", e));
+process.on("uncaughtException", (e) => console.error("uncaughtException", e));
 const server = http.createServer(app);
 initSocket(server);
 
