@@ -2,11 +2,11 @@
   "name": "carepulse-backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/src/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
@@ -45,7 +45,7 @@
     "@types/qrcode": "^1.5.6",
     "prisma": "^6.19.3",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "5.9"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
